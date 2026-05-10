@@ -929,15 +929,23 @@ add_internal_wg() {
 
 # --- AmneziaWG asset integrity (codex-finding #6) ---
 # These .apk are installed with `apk add --allow-untrusted` (no repo
-# signature). We pin SHA256 of the exact version/arch assets that were
-# verified during Task 1 pre-flight. A mismatch => the GitHub release
-# asset was replaced => abort before the root install. If the running
-# OpenWrt version/arch has no pin (e.g. a different 25.12.x), the install
-# proceeds with a loud warning (you're trusting GitHub TLS + the
-# awg-openwrt maintainer's account).
-# Pinned during Task 1 pre-flight on 2026-05-10 for OpenWrt 25.12.2 / aarch64_cortex-a53:
+# signature). We pin SHA256 of the exact assets that were verified during
+# Task 1 pre-flight. A mismatch => the GitHub release asset was replaced
+# => abort before the root install. The pin is keyed on the full asset
+# coordinates — VERSION + arch + target + subtarget — because the awg-openwrt
+# release filename embeds all four (e.g.
+# kmod-amneziawg_v25.12.2_aarch64_cortex-a53_mediatek_mt7622.apk) and
+# kmod-amneziawg (a kernel module) differs byte-for-byte between targets
+# that share an arch (e.g. mediatek/mt7622 vs mediatek/filogic vs
+# qualcommax/ipq807x are all aarch64_cortex-a53). If the running router does
+# not match the pinned coordinates (a different 25.12.x, or the same
+# version/arch on another target), the install proceeds with a loud warning
+# (you're trusting GitHub TLS + the awg-openwrt maintainer's account).
+# Pinned during Task 1 pre-flight on 2026-05-10 for OpenWrt 25.12.2 / aarch64_cortex-a53 / mediatek/mt7622:
 AWG_PINNED_VERSION="25.12.2"
 AWG_PINNED_ARCH="aarch64_cortex-a53"
+AWG_PINNED_TARGET="mediatek"
+AWG_PINNED_SUBTARGET="mt7622"
 
 verify_awg_file() {
     # $1 = package name (e.g. amneziawg-tools), $2 = path to the downloaded .apk
@@ -948,9 +956,11 @@ verify_awg_file() {
         luci-i18n-amneziawg-ru) _expected="b6a07e4aae64c46625756f4ee3945c27d786ed3b557a6e33e5c896aa75cf1b3a" ;;
         *)                      _expected="" ;;
     esac
-    if [ "$VERSION" != "$AWG_PINNED_VERSION" ] || [ "$PKGARCH" != "$AWG_PINNED_ARCH" ] || [ -z "$_expected" ]; then
-        echo "WARNING: no pinned SHA256 for $1 on OpenWrt $VERSION ($PKGARCH) — installing with --allow-untrusted and NO integrity check."
-        echo "You are trusting GitHub TLS + the awg-openwrt maintainer's account. To pin: run 'sha256sum $2', put the hash in verify_awg_file() and set AWG_PINNED_VERSION/ARCH. See https://github.com/Slava-Shchipunov/awg-openwrt/releases"
+    if [ "$VERSION" != "$AWG_PINNED_VERSION" ] || [ "$PKGARCH" != "$AWG_PINNED_ARCH" ] \
+       || [ "$TARGET" != "$AWG_PINNED_TARGET" ] || [ "$SUBTARGET" != "$AWG_PINNED_SUBTARGET" ] \
+       || [ -z "$_expected" ]; then
+        echo "WARNING: no pinned SHA256 for $1 on OpenWrt $VERSION ($PKGARCH/$TARGET/$SUBTARGET) — installing with --allow-untrusted and NO integrity check."
+        echo "You are trusting GitHub TLS + the awg-openwrt maintainer's account. To pin: run 'sha256sum $2', put the hash in verify_awg_file() and set AWG_PINNED_VERSION/ARCH/TARGET/SUBTARGET. See https://github.com/Slava-Shchipunov/awg-openwrt/releases"
         return 0
     fi
     _actual=$(sha256sum "$2" | awk '{print $1}')
@@ -1075,7 +1085,11 @@ install_awg_packages() {
 
     # luci-i18n-amneziawg-ru — Russian LuCI localisation. Optional:
     # download (-fL: 404 -> non-zero) or install failures only emit a
-    # warning and do not abort.
+    # warning and do not abort. NOTE: "optional" means non-blocking for
+    # *availability* (404 / install error), not for *integrity* —
+    # verify_awg_file() still exits if the downloaded .apk does not match
+    # the pinned SHA256 (a tampered .apk is fatal regardless of which
+    # package it claims to be: apk runs its scripts as root).
     if pkg_installed luci-i18n-amneziawg-ru; then
         echo "luci-i18n-amneziawg-ru already installed"
     else
