@@ -1118,7 +1118,7 @@ printf "\033[34;1mVersion: $OPENWRT_RELEASE\033[0m\n"
 
 VERSION_ID=$(echo $VERSION | awk -F. '{print $1}')
 
-if [ "$VERSION_ID" -ne 25 ]; then
+if [ "$VERSION_ID" != "25" ]; then
     printf "\033[31;1mThis fork supports OpenWrt 25.x (apk-based, currently 25.12.x).\033[0m\n"
     printf "For OpenWrt 23.05 / 24.10 (opkg-based) use upstream:\n"
     printf "  https://github.com/itdoginfo/domain-routing-openwrt\n"
