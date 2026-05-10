@@ -9,12 +9,12 @@ Shell скрипт и [роль для Ansible](https://galaxy.ansible.com/ui/st
 
 # Скрипт для установки
 ```
-sh <(wget -O - https://raw.githubusercontent.com/itdoginfo/domain-routing-openwrt/master/getdomains-install.sh)
+sh <(wget -O - https://raw.githubusercontent.com/Stashub/domain-routing-openwrt/support-25.12/getdomains-install.sh)
 ```
 
 # Скрипт для удаления
 ```
-sh <(wget -O - https://raw.githubusercontent.com/itdoginfo/domain-routing-openwrt/refs/heads/master/getdomains-uninstall.sh)
+sh <(wget -O - https://raw.githubusercontent.com/Stashub/domain-routing-openwrt/support-25.12/getdomains-uninstall.sh)
 ```
 
 ## AmneziaWG
@@ -25,31 +25,33 @@ sh <(wget -O - https://raw.githubusercontent.com/itdoginfo/domain-routing-openwr
 Если подходящих пакетов нет, перед настройкой необходимо будет самостоятельно [собрать бинарники AmneziaWG](https://github.com/itdoginfo/domain-routing-openwrt/wiki/Amnezia-WG-Build) для своего устройства и установить их.
 
 ## Скрипт для проверки конфигурации
-Написан для OpenWrt 23.05 и 22.03. На 21.02 работает только половина проверок.
+Адаптирован под OpenWrt 25.12.x (apk); проверено на 25.12.2 (Xiaomi AX6S, `mediatek/mt7622`). Для 23.05 / 24.10 (opkg) используйте upstream-репозиторий: https://github.com/itdoginfo/domain-routing-openwrt
+
+**Внимание (AmneziaWG):** пакеты AmneziaWG ставятся не из официальных репозиториев OpenWrt, а из стороннего репозитория [Slava-Shchipunov/awg-openwrt](https://github.com/Slava-Shchipunov/awg-openwrt/releases) — его сборки привязаны к конкретной версии OpenWrt и архитектуре, и устанавливаются командой `apk add --allow-untrusted` (без проверки подписи репозитория). Скрипт сверяет SHA256 скачанных `.apk` с захардкоженными значениями (зафиксированы для протестированной версии — при несовпадении установка прерывается); на другой 25.12.x, для которой пина нет, AWG-пакеты ставятся с громким предупреждением и без integrity-проверки. Если установка AWG падает с ошибкой скачивания (404) — у стороннего репозитория нет сборки под вашу версию: смотрите https://github.com/Slava-Shchipunov/awg-openwrt/releases (либо используйте версию OpenWrt, под которую сборки есть; либо запиньте свои хэши / соберите `.apk` сами).
 
 [x] - не обязательно означает, что эта часть не работает. Но это повод для ручной проверки.
 
 ### Запуск
 ```
-wget -O - https://raw.githubusercontent.com/itdoginfo/domain-routing-openwrt/master/getdomains-check.sh | sh
+wget -O - https://raw.githubusercontent.com/Stashub/domain-routing-openwrt/support-25.12/getdomains-check.sh | sh
 ```
 
 По-умолчанию запускается на русском языке. Если нужно запустить на английском, то после `sh` нужно добавить `-s --lang en`. Аналогично для проверок на подмену DNS и создания дампа.
 
 ```
-wget -O - https://raw.githubusercontent.com/itdoginfo/domain-routing-openwrt/master/getdomains-check.sh | sh -s --lang en
+wget -O - https://raw.githubusercontent.com/Stashub/domain-routing-openwrt/support-25.12/getdomains-check.sh | sh -s --lang en
 ```
 
 ### Запустить с проверкой на подмену DNS
 ```
-wget -O - https://raw.githubusercontent.com/itdoginfo/domain-routing-openwrt/master/getdomains-check.sh | sh -s dns
+wget -O - https://raw.githubusercontent.com/Stashub/domain-routing-openwrt/support-25.12/getdomains-check.sh | sh -s dns
 ```
 
 ### Запустить с созданием dump
 Все чувствительные переменные затираются.
 
 ```
-wget -O - https://raw.githubusercontent.com/itdoginfo/domain-routing-openwrt/master/getdomains-check.sh | sh -s dump
+wget -O - https://raw.githubusercontent.com/Stashub/domain-routing-openwrt/support-25.12/getdomains-check.sh | sh -s dump
 ```
 
 Поиск ошибок вручную: https://habr.com/ru/post/702388/
