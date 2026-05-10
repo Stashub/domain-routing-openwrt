@@ -316,8 +316,18 @@ else
   checkpoint_false "$CURL_NOT_INSTALLED"
 fi
 
-DNSMASQ=$(apk info -v dnsmasq-full 2>/dev/null | awk -F "-" '{print $3}' | tr -d '.')
-: "${DNSMASQ:=0}"
+# dnsmasq-full: `apk info -e` is the documented installed-status check, so use
+# it for the existence test; only then attempt the version parse. We take just
+# the first line of `apk info -v` and accept a pure-integer result — so an
+# unexpected or multi-line format degrades to "not installed" instead of
+# `[: Illegal number`. The >= 2.87 floor is effectively moot on 25.x (the repo
+# ships dnsmasq-full 2.91), but the upstream semantic is kept.
+if apk info -e dnsmasq-full >/dev/null 2>&1; then
+  DNSMASQ=$(apk info -v dnsmasq-full 2>/dev/null | head -n1 | awk -F "-" '{print $3}' | tr -d '.')
+else
+  DNSMASQ=0
+fi
+case "$DNSMASQ" in '' | *[!0-9]*) DNSMASQ=0 ;; esac
 if [ "$DNSMASQ" -ge 287 ]; then
   checkpoint_true "$DNSMASQ_FULL_INSTALLED"
 else
