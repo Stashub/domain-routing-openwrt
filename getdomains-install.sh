@@ -36,7 +36,7 @@ pkg_del() {
 
 check_repo() {
     printf "\033[32;1mChecking OpenWrt repo availability...\033[0m\n"
-    opkg update | grep -q "Failed to download" && printf "\033[32;1mopkg failed. Check internet or date. Command for force ntp sync: ntpd -p ptbtime1.ptb.de\033[0m\n" && exit 1
+    apk update >/dev/null 2>&1 || { printf "\033[32;1mapk update failed. Check internet or date. Command for force ntp sync: ntpd -p ptbtime1.ptb.de\033[0m\n"; exit 1; }
 }
 
 route_vpn () {
@@ -346,15 +346,32 @@ EOF
 
 }
 
+# dnsmasq → dnsmasq-full swap on apk.
+# Strategy was chosen in Task 1 pre-flight (see "## Результаты pre-flight"
+# in the plan): if `apk --simulate add dnsmasq-full` showed apk resolves
+# the conflict with the base dnsmasq in one transaction, the primary path
+# below is used; otherwise the commented fallback is used instead.
+# The /etc/config/dhcp.apk-new sidecar name is apk's convention for a
+# config file it did not overwrite — confirm it in Task 10 Step 4 after
+# the real install and adjust here if the suffix differs.
 dnsmasqfull() {
-    if opkg list-installed | grep -q dnsmasq-full; then
+    if pkg_installed dnsmasq-full; then
         printf "\033[32;1mdnsmasq-full already installed\033[0m\n"
     else
-        printf "\033[32;1mInstalled dnsmasq-full\033[0m\n"
-        cd /tmp/ && opkg download dnsmasq-full
-        opkg remove dnsmasq && opkg install dnsmasq-full --cache /tmp/
+        printf "\033[32;1mInstalling dnsmasq-full\033[0m\n"
 
-        [ -f /etc/config/dhcp-opkg ] && cp /etc/config/dhcp /etc/config/dhcp-old && mv /etc/config/dhcp-opkg /etc/config/dhcp
+        # Primary path: per opkg-to-apk cheatsheet, --update-cache add
+        # replaces the 'opkg update && opkg install' pair and lets apk
+        # resolve the dnsmasq → dnsmasq-full conflict atomically.
+        apk --update-cache add dnsmasq-full
+
+        # Fallback (use this instead if Task 1 pre-flight showed apk does
+        # NOT atomically swap the package; mirrors the original opkg flow):
+        # apk update
+        # cd /tmp/ && pkg_fetch dnsmasq-full
+        # pkg_del dnsmasq && pkg_install_local /tmp/dnsmasq-full-*.apk
+
+        [ -f /etc/config/dhcp.apk-new ] && cp /etc/config/dhcp /etc/config/dhcp-old && mv /etc/config/dhcp.apk-new /etc/config/dhcp
     fi
 }
 
