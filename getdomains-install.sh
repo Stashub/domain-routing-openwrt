@@ -4,8 +4,13 @@
 
 # --- Package manager wrapper (apk on OpenWrt 25.12+) ---
 # opkg was replaced by apk (Alpine Package Keeper) in OpenWrt 25.12.
-# All package operations go through these wrappers so the rest of the
-# script stays close to the upstream shape.
+# Most package operations go through these wrappers so the rest of the
+# script stays close to the upstream shape. Two spots call apk directly
+# on purpose: check_repo() does a bare `apk update` (mirrors upstream's
+# bare `opkg update`), and dnsmasqfull() uses `apk --update-cache add`
+# for the atomic dnsmasq -> dnsmasq-full swap (a flag the wrappers don't
+# forward). pkg_update / pkg_fetch / pkg_del are kept for symmetry and
+# the commented dnsmasq fallback below.
 
 pkg_update() {
     apk update
