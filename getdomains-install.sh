@@ -927,88 +927,169 @@ add_internal_wg() {
     exit 0
 }
 
+# --- AmneziaWG asset integrity (codex-finding #6) ---
+# These .apk are installed with `apk add --allow-untrusted` (no repo
+# signature). We pin SHA256 of the exact version/arch assets that were
+# verified during Task 1 pre-flight. A mismatch => the GitHub release
+# asset was replaced => abort before the root install. If the running
+# OpenWrt version/arch has no pin (e.g. a different 25.12.x), the install
+# proceeds with a loud warning (you're trusting GitHub TLS + the
+# awg-openwrt maintainer's account).
+# Pinned during Task 1 pre-flight on 2026-05-10 for OpenWrt 25.12.2 / aarch64_cortex-a53:
+AWG_PINNED_VERSION="25.12.2"
+AWG_PINNED_ARCH="aarch64_cortex-a53"
+
+verify_awg_file() {
+    # $1 = package name (e.g. amneziawg-tools), $2 = path to the downloaded .apk
+    case "$1" in
+        amneziawg-tools)        _expected="eed5a91660d31dc3ced16e41f41befdd69691e39d560dd2724211b5c3ed522df" ;;
+        kmod-amneziawg)         _expected="4b98e6057f0de47569984e1c7d10adee2414d5cc62400b92b10dc8aba8206039" ;;
+        luci-proto-amneziawg)   _expected="275bcb8ce69a4104e6e45c41fd5848415834dfc67e715e025b37ef3ed2b6d26c" ;;
+        luci-i18n-amneziawg-ru) _expected="b6a07e4aae64c46625756f4ee3945c27d786ed3b557a6e33e5c896aa75cf1b3a" ;;
+        *)                      _expected="" ;;
+    esac
+    if [ "$VERSION" != "$AWG_PINNED_VERSION" ] || [ "$PKGARCH" != "$AWG_PINNED_ARCH" ] || [ -z "$_expected" ]; then
+        echo "WARNING: no pinned SHA256 for $1 on OpenWrt $VERSION ($PKGARCH) — installing with --allow-untrusted and NO integrity check."
+        echo "You are trusting GitHub TLS + the awg-openwrt maintainer's account. To pin: run 'sha256sum $2', put the hash in verify_awg_file() and set AWG_PINNED_VERSION/ARCH. See https://github.com/Slava-Shchipunov/awg-openwrt/releases"
+        return 0
+    fi
+    _actual=$(sha256sum "$2" | awk '{print $1}')
+    if [ "$_actual" != "$_expected" ]; then
+        echo "INTEGRITY CHECK FAILED for $1"
+        echo "  expected: $_expected"
+        echo "  actual:   $_actual"
+        echo "The downloaded release asset does not match the pinned checksum — it may have been replaced. Aborting before root install."
+        exit 1
+    fi
+    echo "$1 SHA256 OK"
+}
+
 install_awg_packages() {
-    # Получение pkgarch с наибольшим приоритетом
-    PKGARCH=$(opkg print-architecture | awk 'BEGIN {max=0} {if ($3 > max) {max = $3; arch = $2}} END {print arch}')
+    # apk reports a single architecture string in /etc/apk/arch.
+    PKGARCH=$(cat /etc/apk/arch)
 
     TARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f 1)
     SUBTARGET=$(ubus call system board | jsonfilter -e '@.release.target' | cut -d '/' -f 2)
     VERSION=$(ubus call system board | jsonfilter -e '@.release.version')
-    PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.ipk"
+    # AmneziaWG packages are NOT in the OpenWrt repos — they are pulled
+    # from Slava-Shchipunov/awg-openwrt GitHub releases, and the asset
+    # name (and the release tag) is built from this exact OpenWrt VERSION.
+    # So a 25.12.1 / 25.12.3 router asks for a different URL than the
+    # pinned-and-tested 25.12.2. The curl calls below use -f so a missing
+    # build (404 for this version/arch) fails here instead of "downloading"
+    # a 404 HTML page; verify_awg_file() then SHA256-checks each download
+    # before install. Task 1 pre-flight HEAD-checked these URLs and pinned
+    # the hashes (see "## Результаты pre-flight" — VERSION 25.12.2).
+    PKGPOSTFIX="_v${VERSION}_${PKGARCH}_${TARGET}_${SUBTARGET}.apk"
     BASE_URL="https://github.com/Slava-Shchipunov/awg-openwrt/releases/download/"
 
     AWG_DIR="/tmp/amneziawg"
     mkdir -p "$AWG_DIR"
 
-    if opkg list-installed | grep -q amneziawg-tools; then
+    if pkg_installed amneziawg-tools; then
         echo "amneziawg-tools already installed"
     else
         AMNEZIAWG_TOOLS_FILENAME="amneziawg-tools${PKGPOSTFIX}"
         DOWNLOAD_URL="${BASE_URL}v${VERSION}/${AMNEZIAWG_TOOLS_FILENAME}"
-        curl -L -o "$AWG_DIR/$AMNEZIAWG_TOOLS_FILENAME" "$DOWNLOAD_URL"
+        curl -fL -o "$AWG_DIR/$AMNEZIAWG_TOOLS_FILENAME" "$DOWNLOAD_URL"
 
         if [ $? -eq 0 ]; then
             echo "amneziawg-tools file downloaded successfully"
         else
-            echo "Error downloading amneziawg-tools. Please, install amneziawg-tools manually and run the script again"
+            echo "Error downloading amneziawg-tools from $DOWNLOAD_URL"
+            echo "No AmneziaWG build for OpenWrt $VERSION ($PKGARCH/$TARGET/$SUBTARGET)? Check https://github.com/Slava-Shchipunov/awg-openwrt/releases"
+            echo "Then install amneziawg-tools manually and run the script again"
             exit 1
         fi
 
-        opkg install "$AWG_DIR/$AMNEZIAWG_TOOLS_FILENAME"
+        verify_awg_file amneziawg-tools "$AWG_DIR/$AMNEZIAWG_TOOLS_FILENAME"
+
+        pkg_install_local "$AWG_DIR/$AMNEZIAWG_TOOLS_FILENAME"
 
         if [ $? -eq 0 ]; then
-            echo "amneziawg-tools file downloaded successfully"
+            echo "amneziawg-tools file installed successfully"
         else
             echo "Error installing amneziawg-tools. Please, install amneziawg-tools manually and run the script again"
             exit 1
         fi
     fi
     
-    if opkg list-installed | grep -q kmod-amneziawg; then
+    if pkg_installed kmod-amneziawg; then
         echo "kmod-amneziawg already installed"
     else
         KMOD_AMNEZIAWG_FILENAME="kmod-amneziawg${PKGPOSTFIX}"
         DOWNLOAD_URL="${BASE_URL}v${VERSION}/${KMOD_AMNEZIAWG_FILENAME}"
-        curl -L -o "$AWG_DIR/$KMOD_AMNEZIAWG_FILENAME" "$DOWNLOAD_URL"
+        curl -fL -o "$AWG_DIR/$KMOD_AMNEZIAWG_FILENAME" "$DOWNLOAD_URL"
 
         if [ $? -eq 0 ]; then
             echo "kmod-amneziawg file downloaded successfully"
         else
-            echo "Error downloading kmod-amneziawg. Please, install kmod-amneziawg manually and run the script again"
+            echo "Error downloading kmod-amneziawg from $DOWNLOAD_URL"
+            echo "No AmneziaWG build for OpenWrt $VERSION ($PKGARCH/$TARGET/$SUBTARGET)? Check https://github.com/Slava-Shchipunov/awg-openwrt/releases"
+            echo "Then install kmod-amneziawg manually and run the script again"
             exit 1
         fi
-        
-        opkg install "$AWG_DIR/$KMOD_AMNEZIAWG_FILENAME"
+
+        verify_awg_file kmod-amneziawg "$AWG_DIR/$KMOD_AMNEZIAWG_FILENAME"
+
+        pkg_install_local "$AWG_DIR/$KMOD_AMNEZIAWG_FILENAME"
 
         if [ $? -eq 0 ]; then
-            echo "kmod-amneziawg file downloaded successfully"
+            echo "kmod-amneziawg file installed successfully"
         else
             echo "Error installing kmod-amneziawg. Please, install kmod-amneziawg manually and run the script again"
             exit 1
         fi
     fi
     
-    if opkg list-installed | grep -q luci-app-amneziawg; then
-        echo "luci-app-amneziawg already installed"
+    # The previous LuCI app package is not published in awg-openwrt for
+    # OpenWrt 25.12.x. The LuCI integration now ships as luci-proto-amneziawg
+    # (the protocol plugin that lets you select proto='amneziawg' in the UI).
+    if pkg_installed luci-proto-amneziawg; then
+        echo "luci-proto-amneziawg already installed"
     else
-        LUCI_APP_AMNEZIAWG_FILENAME="luci-app-amneziawg${PKGPOSTFIX}"
-        DOWNLOAD_URL="${BASE_URL}v${VERSION}/${LUCI_APP_AMNEZIAWG_FILENAME}"
-        curl -L -o "$AWG_DIR/$LUCI_APP_AMNEZIAWG_FILENAME" "$DOWNLOAD_URL"
+        LUCI_PROTO_AMNEZIAWG_FILENAME="luci-proto-amneziawg${PKGPOSTFIX}"
+        DOWNLOAD_URL="${BASE_URL}v${VERSION}/${LUCI_PROTO_AMNEZIAWG_FILENAME}"
+        curl -fL -o "$AWG_DIR/$LUCI_PROTO_AMNEZIAWG_FILENAME" "$DOWNLOAD_URL"
 
         if [ $? -eq 0 ]; then
-            echo "luci-app-amneziawg file downloaded successfully"
+            echo "luci-proto-amneziawg file downloaded successfully"
         else
-            echo "Error downloading luci-app-amneziawg. Please, install luci-app-amneziawg manually and run the script again"
+            echo "Error downloading luci-proto-amneziawg from $DOWNLOAD_URL"
+            echo "No AmneziaWG build for OpenWrt $VERSION ($PKGARCH/$TARGET/$SUBTARGET)? Check https://github.com/Slava-Shchipunov/awg-openwrt/releases"
+            echo "Then install luci-proto-amneziawg manually and run the script again"
             exit 1
         fi
 
-        opkg install "$AWG_DIR/$LUCI_APP_AMNEZIAWG_FILENAME"
+        verify_awg_file luci-proto-amneziawg "$AWG_DIR/$LUCI_PROTO_AMNEZIAWG_FILENAME"
+
+        pkg_install_local "$AWG_DIR/$LUCI_PROTO_AMNEZIAWG_FILENAME"
 
         if [ $? -eq 0 ]; then
-            echo "luci-app-amneziawg file downloaded successfully"
+            echo "luci-proto-amneziawg file installed successfully"
         else
-            echo "Error installing luci-app-amneziawg. Please, install luci-app-amneziawg manually and run the script again"
+            echo "Error installing luci-proto-amneziawg. Please, install luci-proto-amneziawg manually and run the script again"
             exit 1
+        fi
+    fi
+
+    # luci-i18n-amneziawg-ru — Russian LuCI localisation. Optional:
+    # download (-fL: 404 -> non-zero) or install failures only emit a
+    # warning and do not abort.
+    if pkg_installed luci-i18n-amneziawg-ru; then
+        echo "luci-i18n-amneziawg-ru already installed"
+    else
+        LUCI_I18N_AMNEZIAWG_FILENAME="luci-i18n-amneziawg-ru${PKGPOSTFIX}"
+        DOWNLOAD_URL="${BASE_URL}v${VERSION}/${LUCI_I18N_AMNEZIAWG_FILENAME}"
+        if curl -fL -o "$AWG_DIR/$LUCI_I18N_AMNEZIAWG_FILENAME" "$DOWNLOAD_URL"; then
+            verify_awg_file luci-i18n-amneziawg-ru "$AWG_DIR/$LUCI_I18N_AMNEZIAWG_FILENAME"
+            if pkg_install_local "$AWG_DIR/$LUCI_I18N_AMNEZIAWG_FILENAME"; then
+                echo "luci-i18n-amneziawg-ru installed (optional)"
+            else
+                echo "Warning: failed to install luci-i18n-amneziawg-ru (optional). Continuing."
+            fi
+        else
+            echo "Warning: failed to download luci-i18n-amneziawg-ru (optional, not always published). Continuing."
         fi
     fi
 
