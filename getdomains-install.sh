@@ -2,6 +2,38 @@
 
 #set -x
 
+# --- Package manager wrapper (apk on OpenWrt 25.12+) ---
+# opkg was replaced by apk (Alpine Package Keeper) in OpenWrt 25.12.
+# All package operations go through these wrappers so the rest of the
+# script stays close to the upstream shape.
+
+pkg_update() {
+    apk update
+}
+
+pkg_installed() {
+    # returns 0 if installed, 1 otherwise
+    apk info -e "$1" >/dev/null 2>&1
+}
+
+pkg_install() {
+    apk add "$@"
+}
+
+pkg_install_local() {
+    # local .apk file (used for AmneziaWG downloads from third-party repo)
+    apk add --allow-untrusted "$1"
+}
+
+pkg_fetch() {
+    # download to current dir without installing — replaces 'opkg download'
+    apk fetch "$1"
+}
+
+pkg_del() {
+    apk del "$@"
+}
+
 check_repo() {
     printf "\033[32;1mChecking OpenWrt repo availability...\033[0m\n"
     opkg update | grep -q "Failed to download" && printf "\033[32;1mopkg failed. Check internet or date. Command for force ntp sync: ntpd -p ptbtime1.ptb.de\033[0m\n" && exit 1
