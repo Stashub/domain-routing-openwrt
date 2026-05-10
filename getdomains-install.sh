@@ -363,7 +363,9 @@ dnsmasqfull() {
         # Primary path: per opkg-to-apk cheatsheet, --update-cache add
         # replaces the 'opkg update && opkg install' pair and lets apk
         # resolve the dnsmasq → dnsmasq-full conflict atomically.
-        apk --update-cache add dnsmasq-full
+        # Fail loud: the script has no `set -e`, so an unguarded failure here
+        # would fall through to the sidecar handling and keep installing.
+        apk --update-cache add dnsmasq-full || { printf "\033[31;1mError: failed to install dnsmasq-full. Check 'apk add dnsmasq-full' output (disk space, repo reachability) and rerun.\033[0m\n"; exit 1; }
 
         # Fallback (use this instead if Task 1 pre-flight showed apk does
         # NOT atomically swap the package; mirrors the original opkg flow):
