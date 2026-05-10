@@ -58,7 +58,7 @@ set_language_en() {
   CURL_NOT_INSTALLED="$CURL_PACKAGE $NOT_INSTALLED. Install it: apk add $CURL_PACKAGE"
   DNSMASQ_FULL_INSTALLED="$DNSMASQ_FULL_PACKAGE $INSTALLED"
   DNSMASQ_FULL_NOT_INSTALLED="$DNSMASQ_FULL_PACKAGE $NOT_INSTALLED"
-  DNSMASQ_FULL_DETAILS="If you don't use vpn_domains set, it's OK\nCheck version: apk info -v $DNSMASQ_FULL_PACKAGE\nRequired version >= $DNSMASQ_FULL_REQUIRED_VERSION."
+  DNSMASQ_FULL_DETAILS="If you don't use vpn_domains set, it's OK\nInstall it: apk add $DNSMASQ_FULL_PACKAGE  (needs version >= $DNSMASQ_FULL_REQUIRED_VERSION for nftset; the OpenWrt 25.x repo provides it)."
   XRAY_CORE_PACKAGE_DETECTED="$XRAY_CORE_PACKAGE package detected"
   LUCI_APP_XRAY_PACKAGE_DETECTED="$LUCI_APP_XRAY_PACKAGE package detected which is incompatible. Remove it: apk del $LUCI_APP_XRAY_PACKAGE"
   DNSMASQ_SERVICE_RUNNING="$DNSMASQ_PACKAGE service $RUNNING"
@@ -160,7 +160,7 @@ set_language_ru() {
   CURL_NOT_INSTALLED="$CURL_PACKAGE $NOT_INSTALLED. Установите его: apk add $CURL_PACKAGE"
   DNSMASQ_FULL_INSTALLED="$DNSMASQ_FULL_PACKAGE $INSTALLED"
   DNSMASQ_FULL_NOT_INSTALLED="$DNSMASQ_FULL_PACKAGE $NOT_INSTALLED"
-  DNSMASQ_FULL_DETAILS="Если вы не используете vpn_domains set, это нормально\nПроверьте версию: apk info -v $DNSMASQ_FULL_PACKAGE\nТребуемая версия >= $DNSMASQ_FULL_REQUIRED_VERSION."
+  DNSMASQ_FULL_DETAILS="Если вы не используете vpn_domains set, это нормально\nУстановите: apk add $DNSMASQ_FULL_PACKAGE  (нужна версия >= $DNSMASQ_FULL_REQUIRED_VERSION для nftset; репозиторий OpenWrt 25.x её даёт)."
   XRAY_CORE_PACKAGE_DETECTED="Обнаружен пакет $XRAY_CORE_PACKAGE"
   LUCI_APP_XRAY_PACKAGE_DETECTED="Обнаружен пакет $LUCI_APP_XRAY_PACKAGE, который не совместим. Удалите его: apk del $LUCI_APP_XRAY_PACKAGE"
   DNSMASQ_SERVICE_RUNNING="Сервис $DNSMASQ_PACKAGE $RUNNING"
@@ -316,19 +316,12 @@ else
   checkpoint_false "$CURL_NOT_INSTALLED"
 fi
 
-# dnsmasq-full: `apk info -e` is the documented installed-status check, so use
-# it for the existence test; only then attempt the version parse. We take just
-# the first line of `apk info -v` and accept a pure-integer result — so an
-# unexpected or multi-line format degrades to "not installed" instead of
-# `[: Illegal number`. The >= 2.87 floor is effectively moot on 25.x (the repo
-# ships dnsmasq-full 2.91), but the upstream semantic is kept.
+# dnsmasq-full: on OpenWrt 25.x the repo ships dnsmasq-full 2.91 — well above
+# the 2.87 nftset floor — so an installed-check is enough. (`apk info -v <pkg>`
+# prints description/URL/size, not a version, so there is nothing reliable to
+# parse; the >= 2.87 comparison is moot on the supported range. `apk info -e` is
+# the documented installed-status check, same as for the other packages here.)
 if apk info -e dnsmasq-full >/dev/null 2>&1; then
-  DNSMASQ=$(apk info -v dnsmasq-full 2>/dev/null | head -n1 | awk -F "-" '{print $3}' | tr -d '.')
-else
-  DNSMASQ=0
-fi
-case "$DNSMASQ" in '' | *[!0-9]*) DNSMASQ=0 ;; esac
-if [ "$DNSMASQ" -ge 287 ]; then
   checkpoint_true "$DNSMASQ_FULL_INSTALLED"
 else
   checkpoint_false "$DNSMASQ_FULL_NOT_INSTALLED"
