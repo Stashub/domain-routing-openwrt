@@ -143,11 +143,11 @@ add_tunnel() {
 
     if [ "$TUNNEL" == 'wg' ]; then
         printf "\033[32;1mConfigure WireGuard\033[0m\n"
-        if opkg list-installed | grep -q wireguard-tools; then
+        if pkg_installed wireguard-tools; then
             echo "Wireguard already installed"
         else
             echo "Installed wg..."
-            opkg install wireguard-tools
+            pkg_install wireguard-tools
         fi
 
         route_vpn
@@ -195,24 +195,24 @@ add_tunnel() {
     fi
 
     if [ "$TUNNEL" == 'ovpn' ]; then
-        if opkg list-installed | grep -q openvpn-openssl; then
+        if pkg_installed openvpn-openssl; then
             echo "OpenVPN already installed"
         else
             echo "Installed openvpn"
-            opkg install openvpn-openssl
+            pkg_install openvpn-openssl
         fi
         printf "\033[32;1mConfigure route for OpenVPN\033[0m\n"
         route_vpn
     fi
 
     if [ "$TUNNEL" == 'singbox' ]; then
-        if opkg list-installed | grep -q sing-box; then
+        if pkg_installed sing-box; then
             echo "Sing-box already installed"
         else
             AVAILABLE_SPACE=$(df / | awk 'NR>1 { print $4 }')
             if  [[ "$AVAILABLE_SPACE" -gt 2000 ]]; then
                 echo "Installed sing-box"
-                opkg install sing-box
+                pkg_install sing-box
             else
                 printf "\033[31;1mNo free space for a sing-box. Sing-box is not installed.\033[0m\n"
                 exit 1
@@ -553,11 +553,11 @@ add_dns_resolver() {
     done
 
     if [ "$DNS_RESOLVER" == 'DNSCRYPT' ]; then
-        if opkg list-installed | grep -q dnscrypt-proxy2; then
+        if pkg_installed dnscrypt-proxy2; then
             printf "\033[32;1mDNSCrypt2 already installed\033[0m\n"
         else
             printf "\033[32;1mInstalled dnscrypt-proxy2\033[0m\n"
-            opkg install dnscrypt-proxy2
+            pkg_install dnscrypt-proxy2
             if grep -q "# server_names" /etc/dnscrypt-proxy2/dnscrypt-proxy.toml; then
                 sed -i "s/^# server_names =.*/server_names = [\'google\', \'cloudflare\', \'scaleway-fr\', \'yandex\']/g" /etc/dnscrypt-proxy2/dnscrypt-proxy.toml
             fi
@@ -587,11 +587,11 @@ add_dns_resolver() {
     if [ "$DNS_RESOLVER" == 'STUBBY' ]; then
         printf "\033[32;1mConfigure Stubby\033[0m\n"
 
-        if opkg list-installed | grep -q stubby; then
+        if pkg_installed stubby; then
             printf "\033[32;1mStubby already installed\033[0m\n"
         else
             printf "\033[32;1mInstalled stubby\033[0m\n"
-            opkg install stubby
+            pkg_install stubby
 
             printf "\033[32;1mConfigure Dnsmasq for Stubby\033[0m\n"
             uci set dhcp.@dnsmasq[0].noresolv="1"
@@ -609,11 +609,11 @@ add_dns_resolver() {
 
 add_packages() {
     for package in curl nano; do
-        if opkg list-installed | grep -q "^$package "; then
+        if pkg_installed "$package"; then
             printf "\033[32;1m$package already installed\033[0m\n"
         else
             printf "\033[32;1mInstalling $package...\033[0m\n"
-            opkg install "$package"
+            pkg_install "$package"
             
             if "$package" --version >/dev/null 2>&1; then
                 printf "\033[32;1m$package was successfully installed and available\033[0m\n"
@@ -728,11 +728,11 @@ add_internal_wg() {
         PROTO="wireguard"
         ZONE_NAME="wg_internal"
 
-        if opkg list-installed | grep -q wireguard-tools; then
+        if pkg_installed wireguard-tools; then
             echo "Wireguard already installed"
         else
             echo "Installed wg..."
-            opkg install wireguard-tools
+            pkg_install wireguard-tools
         fi
     fi
 
